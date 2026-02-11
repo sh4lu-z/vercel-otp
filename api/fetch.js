@@ -1,4 +1,5 @@
 const speakeasy = require('speakeasy');
+const path = require('path'); 
 
 export default async function handler(req, res) {
     const { file, otp } = req.query;
@@ -21,7 +22,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 📁 ෆයිල් ලිස්ට් එක ලබා ගැනීම
+        
         if (!file) {
             const listUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/`;
             const response = await fetch(listUrl, {
@@ -31,24 +32,42 @@ export default async function handler(req, res) {
             const data = await response.json();
             if (!Array.isArray(data)) throw new Error("GitHub error");
 
-            const fileList = data.filter(item => item.type === 'file').map(item => item.name);
+            
+            const fileList = data.map(item => ({
+                name: item.name,
+                type: item.type 
+            }));
             return res.status(200).json(fileList);
         }
 
-        // 📥 නිශ්චිත ෆයිල් එකක් ලබා ගැනීම
+     
         const fetchUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${file}`;
         const response = await fetch(fetchUrl, {
             headers: {
                 'Authorization': `Bearer ${GITHUB_TOKEN}`,
-                'Accept': 'application/vnd.github.v3.raw'
+                'Accept': 'application/vnd.github.v3.raw' // Raw data 
             }
         });
 
-        const content = await response.text();
-        res.setHeader('Content-Type', 'text/plain');
-        return res.status(200).send(content);
+        if (!response.ok) throw new Error("File not found");
+
+        const ext = path.extname(file).toLowerCase();
+        let contentType = 'text/plain';
+
+        if (['.png', '.jpg', '.jpeg', '.gif'].includes(ext)) contentType = `image/${ext.replace('.', '')}`;
+        else if (ext === '.mp4') contentType = 'video/mp4';
+        else if (ext === '.pdf') contentType = 'application/pdf';
+        else if (ext === '.json') contentType = 'application/json';
+
+        // ⚠️ Binary Data විදියට ගන්න ඕන (ArrayBuffer)
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        res.setHeader('Content-Type', contentType);
+        return res.status(200).send(buffer);
 
     } catch (error) {
+        console.error(error);
         return res.status(500).json({ error: "Sync Failed", details: error.message });
     }
 }
