@@ -1,5 +1,5 @@
 const speakeasy = require('speakeasy');
-const path = require('path'); 
+const path = require('path');
 
 export default async function handler(req, res) {
     const { file, otp } = req.query;
@@ -22,44 +22,49 @@ export default async function handler(req, res) {
     }
 
     try {
-        
+        // 🚀 1. ෆයිල් ලිස්ට් එක ගන්න අවස්ථාව (Recursive Trees API)
         if (!file) {
-            const listUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/`;
+            const listUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/main?recursive=1`;
             const response = await fetch(listUrl, {
                 headers: { 'Authorization': `Bearer ${GITHUB_TOKEN}` }
             });
             
             const data = await response.json();
-            if (!Array.isArray(data)) throw new Error("GitHub error");
-
             
-            const fileList = data.map(item => ({
-                name: item.name,
-                type: item.type 
-            }));
-            return res.status(200).json(fileList);
+            if (!data.tree) {
+                throw new Error(data.message || "Failed to fetch GitHub tree");
+            }
+
+            // ෆෝල්ඩර්ස් නෙවෙයි, ෆයිල්ස් (blobs) වල path විතරක් ගන්නවා
+            const filePaths = data.tree
+                .filter(item => item.type === 'blob')
+                .map(item => item.path);
+
+            return res.status(200).json(filePaths);
         }
 
-     
+        // 📥 2. නිශ්චිත ෆයිල් එකක් බාන අවස්ථාව (Contents API)
         const fetchUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${file}`;
         const response = await fetch(fetchUrl, {
             headers: {
                 'Authorization': `Bearer ${GITHUB_TOKEN}`,
-                'Accept': 'application/vnd.github.v3.raw' // Raw data 
+                'Accept': 'application/vnd.github.v3.raw'
             }
         });
 
-        if (!response.ok) throw new Error("File not found");
+        if (!response.ok) {
+            return res.status(404).json({ error: "File not found on GitHub" });
+        }
 
+        // Content-Type එක තීරණය කිරීම
         const ext = path.extname(file).toLowerCase();
         let contentType = 'text/plain';
-
         if (['.png', '.jpg', '.jpeg', '.gif'].includes(ext)) contentType = `image/${ext.replace('.', '')}`;
         else if (ext === '.mp4') contentType = 'video/mp4';
         else if (ext === '.pdf') contentType = 'application/pdf';
         else if (ext === '.json') contentType = 'application/json';
 
-        // ⚠️ Binary Data විදියට ගන්න ඕන (ArrayBuffer)
+        // Binary Data ලබා ගැනීම
         const arrayBuffer = await response.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
@@ -67,7 +72,7 @@ export default async function handler(req, res) {
         return res.status(200).send(buffer);
 
     } catch (error) {
-        console.error(error);
+        console.error("API Error:", error.message);
         return res.status(500).json({ error: "Sync Failed", details: error.message });
     }
 }
