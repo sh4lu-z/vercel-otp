@@ -44,7 +44,8 @@ export default async function handler(req, res) {
         }
 
         // 📥 2. නිශ්චිත ෆයිල් එකක් බාන අවස්ථාව (Contents API)
-        const fetchUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${file}`;
+        const branch = "new-update-and-erros-fix";
+        const fetchUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${file}?ref=${branch}`;
         const response = await fetch(fetchUrl, {
             headers: {
                 'Authorization': `Bearer ${GITHUB_TOKEN}`,
